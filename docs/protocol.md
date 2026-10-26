@@ -37,7 +37,7 @@ drivers can't drive it.
 | A, B, X, Y | `BTN_TRIGGER` 288, `BTN_THUMB2` 290, `BTN_THUMB` 289, `BTN_TOP` 291 |
 | LB, RB | 293, 292 |
 | View, Menu | 295, 294 |
-| D-pad | `ABS_HAT0X/Y` in the descriptor, but no change was seen in PC mode |
+| D-pad | the hat switch in report 0x01 (low nibble of byte 1: 0 up, 2 right, 4 down, 6 left, odd = diagonals, 8 released -- measured on the raw report). On hid-generic the evdev `ABS_HAT0X/Y` never move, so hori-ffb decodes the hat from hidraw itself |
 
 ## Force feedback protocol
 

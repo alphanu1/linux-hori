@@ -643,7 +643,33 @@ static void handle_uinput(void)
 	}
 }
 
-/* ---- hidraw acks -------------------------------------------------------- */
+/* ---- hidraw acks, and the d-pad ---------------------------------------- */
+
+/*
+ * The d-pad. The wheel sends it as the standard hat switch in report 0x01
+ * (the low nibble of byte 1: 0 up, 2 right, 4 down, 6 left, odd values the
+ * diagonals, 8 released -- measured), but on hid-generic the evdev hat axes
+ * never move. So it is decoded here from the raw report and sent on the
+ * virtual wheel's ABS_HAT0X / ABS_HAT0Y; the evdev hat events are dropped.
+ */
+static void emit_hat(uint8_t v)
+{
+	static const int8_t hx[9] = { 0, 1, 1, 1, 0, -1, -1, -1, 0 };
+	static const int8_t hy[9] = { -1, -1, 0, 1, 1, 1, 0, -1, 0 };
+	static int last = -1;
+	struct input_event out[3];
+	int h = v > 8 ? 8 : v;
+
+	if (h == last)
+		return;
+	last = h;
+	memset(out, 0, sizeof(out));
+	out[0].type = EV_ABS; out[0].code = ABS_HAT0X; out[0].value = hx[h];
+	out[1].type = EV_ABS; out[1].code = ABS_HAT0Y; out[1].value = hy[h];
+	out[2].type = EV_SYN; out[2].code = SYN_REPORT;
+	if (write(ui_fd, out, sizeof(out)) < 0)
+		perror("hori-ffb: uinput write");
+}
 
 static void handle_hidraw(void)
 {
@@ -687,7 +713,10 @@ static void handle_hidraw(void)
 			if (verbose)
 				hexdump("<-", buf, n < 16 ? n : 16, "(vendor report)");
 		}
-		/* report 0x01 (the controls) arrives through evdev instead */
+		/* report 0x01: the controls arrive through evdev, but the d-pad
+		 * doesn't, so its hat is decoded here */
+		else if (buf[0] == 0x01 && n >= 2)
+			emit_hat(buf[1] & 0x0f);
 	}
 }
 
@@ -761,7 +790,9 @@ static void handle_evdev(int i)
 			}
 			continue;
 		}
-		if (e->type == EV_KEY || (e->type == EV_ABS && e->code != ABS_MISC) ||
+		if (e->type == EV_KEY ||
+		    (e->type == EV_ABS && e->code != ABS_MISC &&
+		     e->code != ABS_HAT0X && e->code != ABS_HAT0Y) ||
 		    (e->type == EV_SYN && e->code == SYN_REPORT))
 			out[m++] = *e;
 	}

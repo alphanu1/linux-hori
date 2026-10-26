@@ -42,6 +42,10 @@ A small **userspace** driver. It:
    packets. The wheel holds the effects in its 16 slots and plays them
    itself.
 
+The d-pad: the wheel sends it as the standard hat switch, but on Linux's
+generic HID driver the hat axes never move. hori-ffb decodes the hat from the
+raw report and sends it on the virtual wheel's `ABS_HAT0X` / `ABS_HAT0Y`.
+
 Userspace rather than a kernel module, so it can't crash the kernel, runs on
 any kernel with `uinput` and `hidraw` (desktop and MiSTer alike), and needs
 nothing built against a particular kernel tree.
