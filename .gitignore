@@ -3,3 +3,4 @@ build/
 *.o
 /hori-ffb
 /hori-ffb-arm
+/tools/ffcheck
