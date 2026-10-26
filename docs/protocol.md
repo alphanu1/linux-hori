@@ -39,28 +39,99 @@ drivers can't drive it.
 | View, Menu | 295, 294 |
 | D-pad | `ABS_HAT0X/Y` in the descriptor, but no change was seen in PC mode |
 
-## Force feedback protocol (from hid-hori PR #18, Truck Control System `0f0d:017a`)
+## Force feedback protocol
 
-**Confirmed on this wheel (2026-10-26, `tools/probe_ffb.py`):** every command
-below was acked, and the forces were felt on the wheel (firmware centring with
-host control off, free wheel with it on, a spring at 40% and 80%, constant
-force at 25% and 60% both ways). Acks are the class byte | 0x80 echoing the
-command, then `00 ea` in bytes 5-6 on every ack (meaning not known yet):
+From hid-hori PR #18 (HORI Truck Control System, `0f0d:017a`), and
+**confirmed on this wheel** on 2026-10-26, first with `tools/probe_ffb.py`
+(forces felt by hand) and then with `hori-ffb` and `tools/ffcheck` (the
+steering axis measured while each effect played, wheel unheld).
 
-```
-20 01 02 00  ->  20 81 02 00 00 ea     host control off
-20 01 03 01  ->  20 81 03 01 00 ea     free all slots
-20 02 41 10  ->  20 82 41 10 00 ea     spring, create slot 0
-20 02 10 41  ->  20 82 10 41 00 ea     constant, play slot 1
-```
+All commands are 32-byte output reports on report `0x20` (`20` + 31 bytes),
+written to the wheel's hidraw node. Values are little-endian 16-bit.
 
-Not yet checked: which way a positive constant force turns the wheel.
+### Device control: `20 01 <cmd> <arg>`
 
-- Effect packets on report `0x20`: `20 02 <type> <op|slot> <params>`.
+| Command | Meaning |
+|---|---|
+| `20 01 01 01` | **stop all**: stops every effect and **empties every slot** |
+| `20 01 01 00` | release the stop |
+| `20 01 02 01` | host control on: the motor plays the host's effects |
+| `20 01 02 00` | host control off |
+| `20 01 03 01` | free all slots |
+
+What the motor does, measured by turning the wheel off-centre with a
+constant force and then sending each combination:
+
+| Stop | Host control | Motor |
+|---|---|---|
+| set (`01 01`) | off | **firmware centring**: back to centre within ~1.5 s |
+| released (`01 00`) | off | slack: the wheel stays where it was left |
+| released | on | the host's effects |
+
+- The order of the two commands doesn't matter; host off alone (stop
+  released) leaves the wheel slack, and sending stop all afterwards starts
+  the centring. Free all has no effect on it.
+- At power-up the firmware sweeps the wheel full left, full right and back
+  to centre, then centres it (stop set, host off).
+- Stop all empties the slots: an update, play or free of a slot afterwards
+  is acked with status `01` and does nothing, while a create works.
+
+### Effects: `20 02 <type> <op|slot> <params>`
+
 - Types: constant `0x10`, ramp `0x20`, square / sine / triangle / saw up /
   saw down `0x31`-`0x35`, spring / damper / inertia / friction `0x41`-`0x44`.
 - Operations: create `0x10`, update `0x00`, play `0x40`, stop `0x80`,
-  free `0x20`.
-- 16 effect slots (0-15), played by the wheel itself.
-- Wheel settings (range, strength, sensitivities) on report `0x21`: write an
-  output report, then read the reply with GET_REPORT (input).
+  free `0x20`, in the high nibble; the slot (0-15) in the low nibble.
+- Parameters (all 16-bit): magnitudes in ±10000 (100 %), times in ms,
+  duration 0 = infinite. Envelope = attack level, attack time, fade level,
+  fade time; HORI's driver sends full levels and zero times when there is
+  none.
+  - constant: level, duration, envelope
+  - ramp: start level, end level, duration, envelope
+  - periodic: period, magnitude (unsigned), phase (ms), offset, duration,
+    envelope
+  - condition: negative coefficient, negative saturation, deadband, positive
+    coefficient, positive saturation, deadband, centre, duration
+- The wheel plays one run of an effect; delays and repeats are the host's to
+  time.
+- Slots can be created and updated while host control is off, and keep their
+  contents across host control off and on (but not across stop all).
+  Creating over a slot that is already allocated replaces it.
+- Several slots play at once (a constant and a damper together, a constant
+  and a spring together).
+
+**Direction:** a positive level turns the wheel **right** (ABS_X rises) and a
+negative one **left**. A constant 15 % takes the unheld wheel from centre to
+its stop in under a second.
+
+Example, constant force 15 % to the left for 1 s, in slot 0:
+
+```
+20 02 10 10 24 fa e8 03 10 27 00 00 10 27   create: level -1500, 1000 ms,
+                                            attack 10000 / 0 ms, fade 10000 / 0 ms
+20 02 10 40 24 fa e8 03 10 27 00 00 10 27   play (same parameters)
+```
+
+### Replies on report `0x20` (input)
+
+```
+20 81 <cmd> <arg> <status> <x>          ack of device control 20 01 <cmd> <arg>
+20 82 <type> <op|slot> <status> <x>     ack of an effect command
+20 03 <type> <slot> 00 ea               effect finished (unsolicited)
+```
+
+- Every command is acked within a few ms.
+- `<status>`: `00` ok; `01` when the slot is empty (seen for update, play
+  and free after stop all).
+- `<x>` is usually `ea`, sometimes `00`, on the same command; meaning not
+  known.
+- `20 03 <type> <slot>` arrives when an effect with a finite duration ends
+  (1.0 s after a play with a 1000 ms duration), including each run of a
+  repeated effect.
+- The hidraw node also carries the controls report `0x01`; it is ignored
+  there (the controls are read through evdev).
+
+### Wheel settings
+
+Range, strength and sensitivities are on report `0x21`: write an output
+report, then read the reply with GET_REPORT (input). Not used yet.
