@@ -97,6 +97,19 @@ Ready-built binaries are on the
 release is built automatically whenever `VERSION` changes on `main`
 (`.github/workflows/release.yml`). `hori-ffb --version` prints the version.
 
+## Requirements
+
+- **hori-ffb:** Linux 4.5 or later with `hidraw` and `uinput`
+  (`CONFIG_HIDRAW`, `CONFIG_INPUT_UINPUT`). Desktop distributions and the
+  standard MiSTer kernel have both. Run as root.
+- **ffb-wheel-test:** any Linux with the standard force feedback interface,
+  plus a force feedback driver for the wheel being tested (Logitech, Fanatec,
+  generic PID wheels... or hori-ffb for the HORI). On MiSTer: Logitech
+  G25/G27/G29, the Fanatec CSL Elite family and PID wheels are built in;
+  Thrustmaster wheels like the T300RS need an extra driver MiSTer doesn't have.
+- Both binaries in the releases are statically linked: no library
+  dependencies.
+
 ## Build
 
 ```
