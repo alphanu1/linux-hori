@@ -166,17 +166,29 @@ Thrustmaster and so on. It shows the wheel it found and the effects it offers,
 plays weak effects (20 % at most) and reports each one:
 
 ```
-Wheel: HORI FFB Racing Wheel (hori-ffb)  (USB 0f0d:015d)
-Force feedback: 15 effects at once; constant ramp periodic rumble spring damper inertia friction gain autocentre
-   => PASS: constant 15%, left (direction 0x4000), moved left
-   ...
-HORI FFB Racing Wheel (hori-ffb): 11 passed, 0 failed, 0 not supported
+Wheel: HORI FFB Racing Wheel (hori-ffb)
+USB 0f0d:015d
+15 effects at once. Supports:
+  constant ramp periodic rumble spring
+  damper inertia friction gain
+  autocentre
+
+PASS  spring                 holds centre
+PASS  push left              moved left
+PASS  push right             moved right
+PASS  vibration (sine)       feel it
+PASS  rumble                 feel it
+PASS  damper                 moved left
+...
+Result: 11 PASS, 0 FAIL, 0 SKIP
 ```
 
-`PASS` means the wheel's driver accepted and played the effect (with
-`moved left`/`moved right` where the steering axis shows it, or a warning if
-it went the wrong way), `FAIL` that the driver refused it, and `SKIP` that the
-wheel doesn't offer that effect. It picks the hori-ffb wheel if present, else
+Each line starts with the result: `PASS` (the wheel's driver accepted and
+played the effect; `moved left`/`moved right` where the steering axis shows
+it, a warning if it went the wrong way, `feel it` for vibrations), `FAIL`
+(the driver refused it, with the reason) or `SKIP` (the wheel doesn't offer
+that effect). Lines are kept short for MiSTer's script screen; `-v` adds the
+steering axis readings for each phase. It picks the hori-ffb wheel if present, else
 the first device with force feedback and a steering axis; `--device
 /dev/input/eventN` chooses one.
 

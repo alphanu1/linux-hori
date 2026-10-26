@@ -8,7 +8,8 @@
  * the steering axis moved where that can be seen. An unheld wheel will still
  * turn to its stop under a 15 % constant force.
  *
- *   sudo tools/ffcheck [--device /dev/input/eventN] [test...]   (default: all)
+ *   sudo tools/ffcheck [-v] [--device /dev/input/eventN] [test...]   (default: all)
+ *   -v also prints how the steering axis moved in each phase
  *
  * Without --device it uses the hori-ffb virtual wheel if it's there, or else
  * the first input device with force feedback and a steering axis.
@@ -34,6 +35,7 @@
 #define PCT(p) (0x7fff * (p) / 100)
 
 static int fd;
+static int verbose;
 static int has_bit(const unsigned long *b, int n);
 static unsigned long ffbits[(FF_CNT + 8 * sizeof(long) - 1) / (8 * sizeof(long))];
 static int w_start, w_end, w_range = 65536;
@@ -44,23 +46,28 @@ static void result(const char *what, int dir)
 {
 	const char *moved = "";
 
-	if (dir && w_range > 0) {
+	if (dir == 2)
+		moved = "feel it";
+	else if (dir == 3)
+		moved = "holds centre";
+	else if (dir && w_range > 0) {
 		int d = w_end - w_start, th = w_range / 16;
 
 		if (dir < 0 ? d < -th : d > th)
-			moved = dir < 0 ? ", moved left" : ", moved right";
+			moved = dir < 0 ? "moved left" : "moved right";
 		else if (dir < 0 ? d > th : d < -th)
-			moved = dir < 0 ? ", moved RIGHT (forces mirrored?)" : ", moved LEFT (forces mirrored?)";
+			moved = dir < 0 ? "WENT RIGHT: mirrored?" : "WENT LEFT: mirrored?";
 		else
-			moved = ", no movement seen: check by feel";
+			moved = "check by feel";
 	}
 	if (t_fail) {
 		n_fail++;
-		printf("   => FAIL: %s\n", what);
+		printf("FAIL  %s\n", what);
 	} else {
 		n_pass++;
-		printf("   => PASS: %s%s\n", what, moved);
+		printf("PASS  %-22s %s\n", what, moved);
 	}
+	fflush(stdout);
 }
 
 static int need(int code, const char *label)
@@ -68,7 +75,8 @@ static int need(int code, const char *label)
 	if (code < 0 || has_bit(ffbits, code))
 		return 1;
 	n_skip++;
-	printf("%s\n   => SKIP: not supported by this wheel\n", label);
+	printf("SKIP  %-22s not supported\n", label);
+	fflush(stdout);
 	return 0;
 }
 
@@ -159,8 +167,8 @@ static void watch(int dur, const char *label)
 			if (last > hi) hi = last;
 		}
 	}
-	printf("   %-30s ABS_X start %5d min %5d max %5d end %5d\n",
-	       label, ai.value, lo, hi, last);
+	if (verbose)
+		printf("      %-26s X %5d..%5d end %5d\n", label, lo, hi, last);
 	w_start = ai.value;
 	w_end = last;
 }
@@ -170,7 +178,7 @@ static void play(int id, int value)
 	struct input_event ev = { .type = EV_FF, .code = id, .value = value };
 
 	if (write(fd, &ev, sizeof(ev)) != sizeof(ev)) {
-		perror("   play");
+		perror("      play");
 		t_fail = 1;
 	}
 }
@@ -180,7 +188,7 @@ static void set(int code, int value)
 	struct input_event ev = { .type = EV_FF, .code = code, .value = value };
 
 	if (write(fd, &ev, sizeof(ev)) != sizeof(ev)) {
-		perror("   set");
+		perror("      set");
 		t_fail = 1;
 	}
 }
@@ -189,7 +197,7 @@ static int upload(struct ff_effect *e)
 {
 	e->id = -1;
 	if (ioctl(fd, EVIOCSFF, e) < 0) {
-		printf("   upload: %s\n", strerror(errno));
+		printf("      upload: %s\n", strerror(errno));
 		t_fail = 1;
 		return -1;
 	}
@@ -201,7 +209,8 @@ static void run(const char *label, struct ff_effect *e, int n, int dur, int coun
 {
 	int i;
 
-	printf("%s\n", label);
+	if (verbose)
+		printf("      %s\n", label);
 	t_fail = 0;
 	for (i = 0; i < n; i++)
 		if (upload(&e[i]) < 0) {
@@ -263,6 +272,11 @@ int main(int argc, char **argv)
 	struct input_absinfo ax = { 0 };
 	char name[256] = "";
 
+	if (argc > 1 && !strcmp(argv[1], "-v")) {
+		verbose = 1;
+		argc--;
+		argv++;
+	}
 	if (argc > 2 && (!strcmp(argv[1], "--device") || !strcmp(argv[1], "-d"))) {
 		fd = open(argv[2], O_RDWR | O_NONBLOCK);
 		if (fd < 0) {
@@ -284,67 +298,85 @@ int main(int argc, char **argv)
 	ioctl(fd, EVIOCGEFFECTS, &n);
 	if (ioctl(fd, EVIOCGABS(ABS_X), &ax) == 0)
 		w_range = ax.maximum - ax.minimum;
-	printf("Wheel: %s  (USB %04x:%04x)\n", name, id.vendor, id.product);
+	printf("Wheel: %s\nUSB %04x:%04x\n", name, id.vendor, id.product);
 	if (n <= 0) {
 		printf("This device offers no force feedback.\n");
 		return 1;
 	}
-	printf("Force feedback: %d effects at once;%s%s%s%s%s%s%s%s%s%s\n\n", n,
-	       has_bit(ffbits, FF_CONSTANT) ? " constant" : "", has_bit(ffbits, FF_RAMP) ? " ramp" : "",
-	       has_bit(ffbits, FF_PERIODIC) ? " periodic" : "", has_bit(ffbits, FF_RUMBLE) ? " rumble" : "",
-	       has_bit(ffbits, FF_SPRING) ? " spring" : "", has_bit(ffbits, FF_DAMPER) ? " damper" : "",
-	       has_bit(ffbits, FF_INERTIA) ? " inertia" : "", has_bit(ffbits, FF_FRICTION) ? " friction" : "",
-	       has_bit(ffbits, FF_GAIN) ? " gain" : "", has_bit(ffbits, FF_AUTOCENTER) ? " autocentre" : "");
+	{
+		static const struct { int bit; const char *name; } fx[] = {
+			{ FF_CONSTANT, "constant" }, { FF_RAMP, "ramp" }, { FF_PERIODIC, "periodic" },
+			{ FF_RUMBLE, "rumble" }, { FF_SPRING, "spring" }, { FF_DAMPER, "damper" },
+			{ FF_INERTIA, "inertia" }, { FF_FRICTION, "friction" }, { FF_GAIN, "gain" },
+			{ FF_AUTOCENTER, "autocentre" },
+		};
+		int k, col;
 
-	if (want(argc, argv, "spring") && need(FF_SPRING, "spring 20%")) {
+		/* short lines: MiSTer's script screen is narrow */
+		printf("%d effects at once. Supports:\n ", n);
+		col = 1;
+		for (k = 0; k < (int)(sizeof(fx) / sizeof(fx[0])); k++) {
+			if (!has_bit(ffbits, fx[k].bit))
+				continue;
+			if (col + 1 + (int)strlen(fx[k].name) > 40) {
+				printf("\n ");
+				col = 1;
+			}
+			col += printf(" %s", fx[k].name);
+		}
+		printf("\n\n");
+	}
+
+	if (want(argc, argv, "spring") && need(FF_SPRING, "spring")) {
 		e[0] = condition(FF_SPRING, 20);
 		e[0].replay.length = 1000;
-		run("spring 20%", e, 1, 1200, 1, 0);
+		run("spring", e, 1, 1200, 1, 3);
 	}
-	if (want(argc, argv, "left") && need(FF_CONSTANT, "constant 15%, left")) {
+	if (want(argc, argv, "left") && need(FF_CONSTANT, "push left")) {
 		e[0] = constant(0x4000, 15, 1000);
-		run("constant 15%, left (direction 0x4000)", e, 1, 1200, 1, -1);
+		run("push left", e, 1, 1200, 1, -1);
 	}
-	if (want(argc, argv, "right") && need(FF_CONSTANT, "constant 15%, right")) {
+	if (want(argc, argv, "right") && need(FF_CONSTANT, "push right")) {
 		e[0] = constant(0xc000, 15, 1000);
-		run("constant 15%, right (direction 0xc000)", e, 1, 1200, 1, 1);
+		run("push right", e, 1, 1200, 1, 1);
 	}
-	if (want(argc, argv, "sine") && need(FF_SINE, "sine 15%")) {
+	if (want(argc, argv, "sine") && need(FF_SINE, "vibration (sine)")) {
 		e[0] = (struct ff_effect){ .type = FF_PERIODIC, .direction = 0x4000 };
 		e[0].u.periodic.waveform = FF_SINE;
 		e[0].u.periodic.period = 250;
 		e[0].u.periodic.magnitude = PCT(15);
 		e[0].replay.length = 1500;
-		run("sine 15%, period 250 ms (feel it)", e, 1, 1700, 1, 0);
+		run("vibration (sine)", e, 1, 1700, 1, 2);
 	}
-	if (want(argc, argv, "rumble") && need(FF_RUMBLE, "rumble 20%")) {
+	if (want(argc, argv, "rumble") && need(FF_RUMBLE, "rumble")) {
 		/* as MiSTer's Main sends it */
 		e[0] = (struct ff_effect){ .type = FF_RUMBLE, .direction = 0x4000 };
 		e[0].u.rumble.strong_magnitude = 0xffff * 20 / 100;
 		e[0].u.rumble.weak_magnitude = 0xffff * 20 / 100;
 		e[0].replay.length = 1000;
-		run("rumble 20% (feel it)", e, 1, 1200, 1, 0);
+		run("rumble", e, 1, 1200, 1, 2);
 	}
-	if (want(argc, argv, "damper") && need(FF_DAMPER, "damper 20%") && need(FF_CONSTANT, "damper 20%")) {
+	if (want(argc, argv, "damper") && need(FF_DAMPER, "damper") && need(FF_CONSTANT, "damper")) {
 		e[0] = constant(0x4000, 15, 1000);
 		e[1] = condition(FF_DAMPER, 20);
-		run("constant 15% left + damper 20%", e, 2, 1200, 1, -1);
+		run("damper", e, 2, 1200, 1, -1);
 	}
 	if (want(argc, argv, "gain") && need(FF_GAIN, "gain") && need(FF_CONSTANT, "gain")) {
 		set(FF_GAIN, 0x4000);	/* 25 % */
 		e[0] = constant(0xc000, 15, 1000);
-		run("constant 15% right at gain 25%", e, 1, 1200, 1, 1);
+		run("gain", e, 1, 1200, 1, 1);
 		set(FF_GAIN, 0xffff);
 	}
 	if (want(argc, argv, "autocentre") && need(FF_AUTOCENTER, "autocentre") && need(FF_CONSTANT, "autocentre")) {
 		set(FF_AUTOCENTER, 0xffff * 20 / 100);
 		e[0] = constant(0x4000, 15, 1000);
-		run("constant 15% left + autocentre 20%", e, 1, 1200, 1, -1);
+		run("autocentre", e, 1, 1200, 1, -1);
 		set(FF_AUTOCENTER, 0);
 	}
 	if (want(argc, argv, "replay") && need(FF_CONSTANT, "replay")) {
 		/* uploaded once, played twice with a release in between */
-		printf("constant 15%% left, 500 ms, played, released, played again\n");
+		if (verbose)
+			printf("      played, released, played again\n");
 		t_fail = 0;
 		e[0] = constant(0x4000, 15, 500);
 		if (upload(&e[0]) >= 0) {
@@ -362,7 +394,8 @@ int main(int argc, char **argv)
 	}
 	if (want(argc, argv, "update") && need(FF_CONSTANT, "update")) {
 		/* how games drive a constant force: one effect, re-uploaded while it plays */
-		printf("constant 15%% left, updated to right while playing\n");
+		if (verbose)
+			printf("      left, updated to right while playing\n");
 		t_fail = 0;
 		e[0] = constant(0x4000, 15, 0);
 		if (upload(&e[0]) >= 0) {
@@ -370,7 +403,7 @@ int main(int argc, char **argv)
 			watch(600, "left");
 			e[0].direction = 0xc000;
 			if (ioctl(fd, EVIOCSFF, &e[0]) < 0) {
-				printf("   update: %s\n", strerror(errno));
+				printf("      update: %s\n", strerror(errno));
 				t_fail = 1;
 			}
 			watch(900, "updated to right");
@@ -385,9 +418,9 @@ int main(int argc, char **argv)
 	if (want(argc, argv, "repeat") && need(FF_CONSTANT, "repeat")) {
 		e[0] = constant(0xc000, 15, 300);
 		e[0].replay.delay = 300;
-		run("constant 15% right, 300 ms, delay 300 ms, played x3", e, 1, 1500, 3, 1);
+		run("delay + repeat x3", e, 1, 1500, 3, 1);
 	}
-	printf("\n%s: %d passed, %d failed, %d not supported\n", name, n_pass, n_fail, n_skip);
+	printf("\nResult: %d PASS, %d FAIL, %d SKIP\n", n_pass, n_fail, n_skip);
 	close(fd);
 	return n_fail ? 2 : 0;
 }
