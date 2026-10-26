@@ -41,7 +41,20 @@ drivers can't drive it.
 
 ## Force feedback protocol (from hid-hori PR #18, Truck Control System `0f0d:017a`)
 
-To be confirmed on this wheel.
+**Confirmed on this wheel (2026-10-26, `tools/probe_ffb.py`):** every command
+below was acked, and the forces were felt on the wheel (firmware centring with
+host control off, free wheel with it on, a spring at 40% and 80%, constant
+force at 25% and 60% both ways). Acks are the class byte | 0x80 echoing the
+command, then `00 ea` in bytes 5-6 on every ack (meaning not known yet):
+
+```
+20 01 02 00  ->  20 81 02 00 00 ea     host control off
+20 01 03 01  ->  20 81 03 01 00 ea     free all slots
+20 02 41 10  ->  20 82 41 10 00 ea     spring, create slot 0
+20 02 10 41  ->  20 82 10 41 00 ea     constant, play slot 1
+```
+
+Not yet checked: which way a positive constant force turns the wheel.
 
 - Effect packets on report `0x20`: `20 02 <type> <op|slot> <params>`.
 - Types: constant `0x10`, ramp `0x20`, square / sine / triangle / saw up /
