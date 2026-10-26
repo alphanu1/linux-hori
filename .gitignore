@@ -1,0 +1,5 @@
+# build output
+build/
+*.o
+/hori-ffb
+/hori-ffb-arm
