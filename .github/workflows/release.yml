@@ -37,6 +37,8 @@ jobs:
         run: |
           make hori-ffb LDFLAGS=-static
           make arm CROSS_COMPILE=arm-linux-gnueabihf-
+          make tools/ffcheck LDFLAGS=-static
+          make ffcheck-arm CROSS_COMPILE=arm-linux-gnueabihf-
           ./hori-ffb --version
           file hori-ffb hori-ffb-arm
 
@@ -47,6 +49,9 @@ jobs:
           mkdir dist
           cp hori-ffb     "dist/hori-ffb-$v-linux-x86_64"
           cp hori-ffb-arm "dist/hori-ffb-$v-mister-armhf"
+          cp tools/ffcheck     "dist/ffb-wheel-test-$v-linux-x86_64"
+          cp tools/ffcheck-arm "dist/ffb-wheel-test-$v-mister-armhf"
+          cp mister/ffb_wheel_test.sh dist/ffb_wheel_test.sh
           (cd dist && sha256sum * > SHA256SUMS)
 
       - name: Release
@@ -61,5 +66,6 @@ jobs:
 
           - \`hori-ffb-$v-linux-x86_64\`: desktop Linux (static)
           - \`hori-ffb-$v-mister-armhf\`: MiSTer (static armhf)
+          - \`ffb-wheel-test-$v-*\` + \`ffb_wheel_test.sh\`: a force feedback test for any wheel Linux has force feedback for (PASS / FAIL / not supported per effect); on MiSTer put the binary in /media/fat/linux/ffb-wheel-test and the script in /media/fat/Scripts
 
           Run as root. See the README for usage."

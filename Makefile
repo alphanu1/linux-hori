@@ -22,11 +22,17 @@ hori-ffb-arm: hori-ffb.c VERSION
 	$(CROSS_COMPILE)gcc $(ARM_CFLAGS) -Wall -Wextra -Wno-unused-parameter -std=gnu11 \
 		-DHORI_FFB_VERSION='"$(VERSION)"' -static -s -o $@ $< -lm
 
-# test tool: uploads and plays weak effects on the virtual wheel
+# test tool: plays weak effects on any force feedback wheel, PASS/FAIL/SKIP
 tools/ffcheck: tools/ffcheck.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $<
+
+# the same for MiSTer (static armhf)
+ffcheck-arm: tools/ffcheck-arm
+tools/ffcheck-arm: tools/ffcheck.c
+	$(CROSS_COMPILE)gcc $(ARM_CFLAGS) -Wall -Wextra -Wno-unused-parameter -std=gnu11 \
+		-static -s -o $@ $<
 
 clean:
-	rm -f hori-ffb hori-ffb-arm tools/ffcheck
+	rm -f hori-ffb hori-ffb-arm tools/ffcheck tools/ffcheck-arm
 
-.PHONY: all arm clean
+.PHONY: all arm ffcheck-arm clean

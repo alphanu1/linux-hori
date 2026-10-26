@@ -158,6 +158,36 @@ when the wheel is unplugged (handled in the code, not yet tried).
   wheel, so the firmware centring stays in charge between rumbles.
 - Start/stop scripts for MiSTer aren't written yet.
 
+## Force feedback test for any wheel
+
+`tools/ffcheck` (released as `ffb-wheel-test`) works with **any** wheel Linux
+offers force feedback for, not only the HORI: Logitech G25/G27/G29, Fanatec,
+Thrustmaster and so on. It shows the wheel it found and the effects it offers,
+plays weak effects (20 % at most) and reports each one:
+
+```
+Wheel: HORI FFB Racing Wheel (hori-ffb)  (USB 0f0d:015d)
+Force feedback: 15 effects at once; constant ramp periodic rumble spring damper inertia friction gain autocentre
+   => PASS: constant 15%, left (direction 0x4000), moved left
+   ...
+HORI FFB Racing Wheel (hori-ffb): 11 passed, 0 failed, 0 not supported
+```
+
+`PASS` means the wheel's driver accepted and played the effect (with
+`moved left`/`moved right` where the steering axis shows it, or a warning if
+it went the wrong way), `FAIL` that the driver refused it, and `SKIP` that the
+wheel doesn't offer that effect. It picks the hori-ffb wheel if present, else
+the first device with force feedback and a steering axis; `--device
+/dev/input/eventN` chooses one.
+
+On MiSTer: `ffb-wheel-test-<version>-mister-armhf` to
+`/media/fat/linux/ffb-wheel-test`, and `mister/ffb_wheel_test.sh` to
+`/media/fat/Scripts`; run it from the Scripts menu. Only the HORI needs
+hori-ffb running; other wheels use MiSTer's own kernel drivers.
+
+The 2026-10-26 run on MiSTer, through hori-ffb: 11 passed, 0 failed, 0 not
+supported.
+
 ## Testing
 
 `tools/ffcheck` (`make tools/ffcheck`) plays weak effects (20 % at most) on
