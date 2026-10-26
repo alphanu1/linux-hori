@@ -1,0 +1,65 @@
+# Build and release hori-ffb when VERSION changes on main.
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the version
+        id: ver
+        run: |
+          v="$(tr -d ' \n\r' < VERSION)"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if git ls-remote --tags origin "refs/tags/v$v" | grep -q .; then
+            echo "Tag v$v already exists: nothing to release."
+            echo "exists=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install the armhf cross compiler
+        if: steps.ver.outputs.exists != '1'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabihf libc6-dev-armhf-cross
+
+      - name: Build
+        if: steps.ver.outputs.exists != '1'
+        run: |
+          make hori-ffb LDFLAGS=-static
+          make arm CROSS_COMPILE=arm-linux-gnueabihf-
+          ./hori-ffb --version
+          file hori-ffb hori-ffb-arm
+
+      - name: Package
+        if: steps.ver.outputs.exists != '1'
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          mkdir dist
+          cp hori-ffb     "dist/hori-ffb-$v-linux-x86_64"
+          cp hori-ffb-arm "dist/hori-ffb-$v-mister-armhf"
+          (cd dist && sha256sum * > SHA256SUMS)
+
+      - name: Release
+        if: steps.ver.outputs.exists != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.ver.outputs.version }}"
+          gh release create "v$v" dist/* \
+            --title "hori-ffb $v" \
+            --notes "hori-ffb $v: force feedback for the HORI FFB Racing Wheel (PC mode, 0f0d:015d).
+
+          - \`hori-ffb-$v-linux-x86_64\`: desktop Linux (static)
+          - \`hori-ffb-$v-mister-armhf\`: MiSTer (static armhf)
+
+          Run as root. See the README for usage."

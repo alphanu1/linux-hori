@@ -40,6 +40,9 @@
 #define HORI_PID	0x015d
 #define HID_ID_STR	"HID_ID=0003:00000F0D:0000015D"
 #define VIRT_VERSION	0x8001		/* the real wheel reports 0x0111 */
+#ifndef HORI_FFB_VERSION
+#define HORI_FFB_VERSION	"dev"	/* from VERSION, by the Makefile */
+#endif
 #define VIRT_NAME	"HORI FFB Racing Wheel (hori-ffb)"
 
 /* ---- wheel protocol (docs/protocol.md) ---------------------------------- */
@@ -980,6 +983,7 @@ static void usage(FILE *f)
 "                     firmware (recovers from a killed hori-ffb; don't use\n"
 "                     while the wheel is doing its power-up sweep)\n"
 "  -d, --hidraw PATH  use this hidraw node instead of searching\n"
+"  -V, --version      print the version\n"
 "  -h, --help         this text\n");
 }
 
@@ -991,6 +995,7 @@ int main(int argc, char **argv)
 		{ "hold", required_argument, NULL, 'H' },
 		{ "reset", no_argument, NULL, 'r' },
 		{ "hidraw", required_argument, NULL, 'd' },
+		{ "version", no_argument, NULL, 'V' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
 	};
@@ -999,7 +1004,7 @@ int main(int argc, char **argv)
 	int opt, i, ret = 1;
 
 	t_start = now_ms();
-	while ((opt = getopt_long(argc, argv, "viH:rd:h", lopts, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "viH:rd:Vh", lopts, NULL)) != -1) {
 		switch (opt) {
 		case 'v': verbose++; break;
 		case 'i': invert = true; break;
@@ -1012,6 +1017,7 @@ int main(int argc, char **argv)
 			break;
 		case 'r': reset_at_start = true; break;
 		case 'd': snprintf(hidraw, sizeof(hidraw), "%s", optarg); break;
+		case 'V': printf("hori-ffb %s\n", HORI_FFB_VERSION); return 0;
 		case 'h': usage(stdout); return 0;
 		default: usage(stderr); return 2;
 		}

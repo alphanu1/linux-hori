@@ -84,6 +84,15 @@ negative level, so an `FF_CONSTANT` with direction `0x4000` turns the wheel
 **left** and `0xc000` turns it **right**. If a game pulls the wrong way, run
 with `--invert`.
 
+## Releases
+
+Ready-built binaries are on the
+[releases page](https://github.com/alphanu1/linux-hori/releases):
+`hori-ffb-<version>-linux-x86_64` for desktop Linux and
+`hori-ffb-<version>-mister-armhf` for MiSTer, both statically linked. A
+release is built automatically whenever `VERSION` changes on `main`
+(`.github/workflows/release.yml`). `hori-ffb --version` prints the version.
+
 ## Build
 
 ```
